@@ -28,15 +28,14 @@ os_version=("11" "bullseye")
 database_engine="mysql"
 webserver_engine="apache"
 
-apache_http_port[0]="80" # http number Port
-apache_http_port[1]="tcp" # http protocol Port 
-
-apache_https_port[0]="443" # https number Port
-apache_https_port[1]="tcp" # https protocol Port 
+http_port[0]="80" # http number Port
+http_port[1]="tcp" # http protocol Port 
+https_port[0]="443" # https number Port
+https_port[1]="tcp" # https protocol Port 
 
 workdir="/opt/otrs"
 persistence_volumes=("persistence_volume_N" "/var/log/")
-expose_ports="${apache_http_port[0]}/${port[1]}"
+expose_ports="${http_port[0]}/${http_port[1] https_port[0]}/${https_port[1]}"
 # end set variables
 # ============================================================ #
 # start definition functions
