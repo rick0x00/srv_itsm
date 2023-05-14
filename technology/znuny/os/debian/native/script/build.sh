@@ -34,7 +34,7 @@ https_port[0]="443" # https number Port
 https_port[1]="tcp" # https protocol Port 
 
 workdir="/opt/otrs"
-persistence_volumes=("persistence_volume_N" "/var/log/")
+persistence_volumes=("/opt/otrs/" "/var/log/")
 expose_ports="${http_port[0]}/${http_port[1] https_port[0]}/${https_port[1]}"
 # end set variables
 # ============================================================ #
