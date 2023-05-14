@@ -28,6 +28,14 @@ os_version=("11" "bullseye")
 database_engine="mysql"
 webserver_engine="apache"
 
+db_host="localhost"
+db_name="zabbix"
+db_user="zabbix"
+db_pass="zabbix"
+
+db_root_user="root"
+db_root_pass="root"
+
 http_port[0]="80" # http number Port
 http_port[1]="tcp" # http protocol Port 
 https_port[0]="443" # https number Port
