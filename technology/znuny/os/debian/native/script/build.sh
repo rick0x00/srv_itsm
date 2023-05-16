@@ -53,11 +53,12 @@ expose_ports="${http_port[0]}/${http_port[1] https_port[0]}/${https_port[1]}"
 # end complement functions
 # ============================== #
 # start main functions
-function pre_install_server () {
-    # Install basic packages
+
+function pre_install () {
     apt update
-    apt install -y apache2
-    apt install -y mariadb-client mariadb-server
+}
+
+function install_dependencies () {
     apt install -y cpanminus
 
     # Install Modules for Perl
@@ -66,7 +67,7 @@ function pre_install_server () {
     apt install -y jq 
 }
 
-function install_server () {
+function install_znuny () {
     # Download Znuny Latest
     cd /opt
     wget https://download.znuny.org/releases/znuny-latest-6.5.tar.gz -O /opt/znuny_latest.tar.gz
@@ -75,11 +76,35 @@ function install_server () {
     tar -xzvf /opt/znuny_latest.tar.gz -C /opt/
 
     # Create a symlink
-    ln -s /opt/$(ls /opt/ | grep [0-9]) /opt/otrs
+    mv /opt/$(ls /opt/ | grep znuny | grep [0-9]) /opt/otrs
 }
 
-function configure_server () {
+function install_webserver () {
+    apt install -y apache2
+}
 
+function install_database () {
+    apt install -y mariadb-client mariadb-server # mariadb
+}
+
+function install_server () {
+    pre_install;
+    install_dependencies;
+    install_znuny;
+    install_webserver;
+    install_database;
+}
+
+function configure_database () {
+    # Database Configuration
+    echo -e "[mysql]\nmax_allowed_packet=256M\n[mysqldump]\nmax_allowed_packet=256M\n\n[mysqld]\ninnodb_file_per_table\ninnodb_log_file_size = 256M\nmax_allowed_packet=256M" > /etc/mysql/mariadb.conf.d/50-znuny_config.cnf
+    systemctl restart mariadb
+
+    mysql -e "SET PASSWORD FOR '$db_root_user'@localhost = PASSWORD('$db_root_pass');"
+    mysql -e "ALTER USER '$db_root_user'@'localhost' IDENTIFIED BY '$db_root_pass';"
+}
+
+function configure_znuny () {
     # Add user for Debian/Ubuntu
     useradd -d /opt/otrs -c 'Znuny user' -g www-data -s /bin/bash -M -N otrs
 
@@ -102,18 +127,14 @@ function configure_server () {
 
     /opt/otrs/bin/otrs.CheckModules.pl --all
 
-    # Database Configuration
-    echo -e "[mysql]\nmax_allowed_packet=256M\n[mysqldump]\nmax_allowed_packet=256M\n\n[mysqld]\ninnodb_file_per_table\ninnodb_log_file_size = 256M\nmax_allowed_packet=256M" > /etc/mysql/mariadb.conf.d/50-znuny_config.cnf
-    systemctl restart mariadb
-
-    mysql -e "SET PASSWORD FOR '$db_root_user'@localhost = PASSWORD('$db_root_pass');"
-    mysql -e "ALTER USER '$db_root_user'@'localhost' IDENTIFIED BY '$db_root_pass';"
-
     mysql -h"$db_host" -u"$db_root_user" -p"$db_root_pass" -e "CREATE USER '$db_user'@'%' IDENTIFIED BY '$db_pass';"
     mysql -h"$db_host" -u"$db_root_user" -p"$db_root_pass" -e "CREATE DATABASE $db_name character set utf8 collate utf8_general_ci;"
     mysql -h"$db_host" -u"$db_root_user" -p"$db_root_pass" -e "GRANT ALL PRIVILEGES ON ${db_name}.* TO '$db_user'@'%';"
     mysql -h"$db_host" -u"$db_root_user" -p"$db_root_pass" -e "FLUSH PRIVILEGES;"
 
+}
+
+function configure_apache () {
     ln -s /opt/otrs/scripts/apache2-httpd.include.conf /etc/apache2/conf-available/zzz_znuny.conf
 
     #Enable the needed Apache modules:
@@ -122,17 +143,86 @@ function configure_server () {
     a2enmod mpm_prefork
     a2enconf zzz_znuny
 
-    systemctl restart apache2
+    systemctl restart apache2    
+}
 
+function configure_server () {
+    configure_database;
+    configure_znuny;
+    configure_apache;
+}
+
+function service_znuny () {
+    local state=$1
+    if [ "$state" == "enable" ] ; then
+        echo "#!/bin/bash" > /etc/rc.local
+        echo 'su -c "/opt/otrs/bin/Cron.sh start" -s /bin/bash otrs' >> /etc/rc.local
+        echo 'su -c "/opt/otrs/bin/otrs.Daemon.pl start" -s /bin/bash otrs' >> /etc/rc.local
+        chmod +x /etc/rc.local
+    else
+        su -c "/opt/otrs/bin/Cron.sh $state" -s /bin/bash otrs
+        su -c "/opt/otrs/bin/otrs.Daemon.pl $state" -s /bin/bash otrs
+    fi
 }
 
 function start_server () {
     systemctl enable --now mariadb
+    systemctl enable --now apache
+    service_znuny enable
     systemctl restart mariadb
     systemctl restart apache2
-    su -c "/opt/otrs/bin/Cron.sh start" -s /bin/bash otrs
-    su -c "/opt/otrs/bin/otrs.Daemon.pl start" -s /bin/bash otrs
+    service_znuny start
+    systemctl status --no-pager -l mariadb
+    systemctl status --no-pager -l apache2
+    service_znuny status
+}
+
+function show_quick_start() {
     echo "Acesse http://host/otrs/installer.pl"
+    echo "###################################################
+    # Setting email
+
+    ############## Inbound email (SMTP) ##############
+
+    # step 1
+    # http://hostname/otrs/index.pl?Action=AdminSystemAddress
+    # Admin - > E-mail Addresses / System Email Addresses Management - > Add System Address (or change Adress)
+    # E-mail Address: user@domain.com
+    # Dysplay name: Znuny user
+    # Queue: Postmaster
+    # Validity: valid
+
+    # step 2 
+    # http://hostname/otrs/index.pl?Action=AdminSystemConfigurationGroup;RootNavigation=Core::Email
+    # Admin - > System Configuration - > Core - > Email
+    # CheckMXRecord::Nameserver: 8.8.8.8
+    # SendmailModule: Kernel::System::Email::SMTPS
+    # SendmailModule::AuthPassword: XXXXXXXXX(insecure Email Password)
+    # SendmailModule::AuthUser: user@domain.com
+    # SendmailModule::AuthenticationType: Password
+    # SendmailModule::Host: smtp.domain
+    # SendmailModule::Port: 465
+
+    ############## Outbound (IMAP) ##############
+
+    # Step 1
+    # http://hostname/otrs/index.pl?Action=AdminMailAccount;Subaction=AddNew
+    # Admin - > PostMaster Mail Accounts / Mail Account Management - > Add Mail Account
+    # Type: IMAPS
+    # Authentication Type: Password
+    # Username: user@domain.com
+    # Password: XXXXXXXXX(insecure Email Password)
+    # Host: imap.domain.com
+
+    ###################################################
+    # inspect logs:
+
+    # http://hostname/otrs/index.pl?Action=AdminLog
+    # Admin - > System log
+
+    # http://hostname/otrs/index.pl?Action=AdminCommunicationLog
+    # Admin - > Communication log
+    "
 }
 
 
@@ -145,51 +235,7 @@ function start_server () {
 # end argument reading
 # ============================================================ #
 # start main executions of code
-pre_install_server
 install_server;
 configure_server;
 start_server;
-
-###################################################
-# Setting email
-
-############## Inbound email (SMTP) ##############
-
-# step 1
-# http://hostname/otrs/index.pl?Action=AdminSystemAddress
-# Admin - > E-mail Addresses / System Email Addresses Management - > Add System Address (or change Adress)
-# E-mail Address: user@domain.com
-# Dysplay name: Znuny user
-# Queue: Postmaster
-# Validity: valid
-
-# step 2 
-# http://hostname/otrs/index.pl?Action=AdminSystemConfigurationGroup;RootNavigation=Core::Email
-# Admin - > System Configuration - > Core - > Email
-# CheckMXRecord::Nameserver: 8.8.8.8
-# SendmailModule: Kernel::System::Email::SMTPS
-# SendmailModule::AuthPassword: XXXXXXXXX(insecure Email Password)
-# SendmailModule::AuthUser: user@domain.com
-# SendmailModule::AuthenticationType: Password
-# SendmailModule::Host: smtp.domain
-# SendmailModule::Port: 465
-
-############## Outbound (IMAP) ##############
-
-# Step 1
-# http://hostname/otrs/index.pl?Action=AdminMailAccount;Subaction=AddNew
-# Admin - > PostMaster Mail Accounts / Mail Account Management - > Add Mail Account
-# Type: IMAPS
-# Authentication Type: Password
-# Username: user@domain.com
-# Password: XXXXXXXXX(insecure Email Password)
-# Host: imap.domain.com
-
-###################################################
-# inspect logs:
-
-# http://hostname/otrs/index.pl?Action=AdminLog
-# Admin - > System log
-
-# http://hostname/otrs/index.pl?Action=AdminCommunicationLog
-# Admin - > Communication log
+show_quick_start;
