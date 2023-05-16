@@ -43,7 +43,7 @@ https_port[1]="tcp" # https protocol Port
 
 workdir="/opt/otrs"
 persistence_volumes=("/opt/otrs/" "/var/log/")
-expose_ports="${http_port[0]}/${http_port[1] https_port[0]}/${https_port[1]}"
+expose_ports="${http_port[0]}/${http_port[1]} ${https_port[0]}/${https_port[1]}"
 # end set variables
 # ============================================================ #
 # start definition functions
@@ -134,6 +134,21 @@ function configure_znuny () {
 
 }
 
+function configure_apache_default_page () {
+    cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default.conf.bkp_$(date +%s)
+    sed -i "/DocumentRoot/s/var\/www\/html/opt\/otrs\/var\/httpd\/htdocs/" /etc/apache2/sites-available/000-default.conf
+}
+
+function configure_apache_directory_listing () {
+    cp /etc/apache2/apache2.conf /etc/apache2/apache2.conf.bkp_$(date +%s)
+    sed -i "/Options/s/Indexes FollowSymLinks/FollowSymLinks/" /etc/apache2/apache2.conf
+}
+
+function configure_apache_server_banner () {
+    cp /etc/apache2/conf-enabled/security.conf /etc/apache2/conf-enabled/security.conf.bkp_$(date +%s)
+    sed -i "/ServerTokens/s/OS/Prod/" /etc/apache2/conf-enabled/security.conf
+    sed -i "/ServerSignature/s/On/Off/" /etc/apache2/conf-enabled/security.conf
+}
 function configure_apache () {
     ln -s /opt/otrs/scripts/apache2-httpd.include.conf /etc/apache2/conf-available/zzz_znuny.conf
 
@@ -142,8 +157,6 @@ function configure_apache () {
     a2dismod mpm_event
     a2enmod mpm_prefork
     a2enconf zzz_znuny
-
-    systemctl restart apache2    
 }
 
 function configure_server () {
