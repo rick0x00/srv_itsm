@@ -149,7 +149,8 @@ function configure_apache_server_banner () {
     sed -i "/ServerTokens/s/OS/Prod/" /etc/apache2/conf-enabled/security.conf
     sed -i "/ServerSignature/s/On/Off/" /etc/apache2/conf-enabled/security.conf
 }
-function configure_apache () {
+
+function configure_apache_znuny_page() {
     ln -s /opt/otrs/scripts/apache2-httpd.include.conf /etc/apache2/conf-available/zzz_znuny.conf
 
     #Enable the needed Apache modules:
@@ -159,9 +160,16 @@ function configure_apache () {
     a2enconf zzz_znuny
 }
 
+function configure_apache () {
+    configure_apache_default_page;
+    configure_apache_directory_listing;
+    configure_apache_server_banner;
+    configure_apache_znuny_page;
+}
+
 function configure_server () {
-    configure_database;
-    configure_znuny;
+    #configure_database;
+    #configure_znuny;
     configure_apache;
 }
 
@@ -248,7 +256,7 @@ function show_quick_start() {
 # end argument reading
 # ============================================================ #
 # start main executions of code
-install_server;
+#install_server;
 configure_server;
-start_server;
-show_quick_start;
+#start_server;
+#show_quick_start;
