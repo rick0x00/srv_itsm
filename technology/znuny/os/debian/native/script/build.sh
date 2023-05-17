@@ -168,8 +168,8 @@ function configure_apache () {
 }
 
 function configure_server () {
-    #configure_database;
-    #configure_znuny;
+    configure_database;
+    Sconfigure_znuny;
     configure_apache;
 }
 
@@ -256,7 +256,7 @@ function show_quick_start() {
 # end argument reading
 # ============================================================ #
 # start main executions of code
-#install_server;
+install_server;
 configure_server;
-#start_server;
-#show_quick_start;
+start_server;
+show_quick_start;
